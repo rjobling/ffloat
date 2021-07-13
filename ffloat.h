@@ -5,6 +5,7 @@
 #pragma once
 
 #include <proto/mathffp.h>
+#include "ffpieee.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -13,11 +14,9 @@ struct ffloat
 	float value;
 
 	ffloat() {}
-	ffloat(const ffloat& f) { value = f.value; }
-	explicit ffloat(float f) { value = f; }
-	explicit ffloat(int i) { value = SPFlt(i); }
+	ffloat(const ffloat& f) : value(f.value) {}
+	explicit ffloat(int i) : value(SPFlt(i)) {}
 
-	explicit operator float() const { return value; }
 	explicit operator int() const { return SPFix(value); }
 	explicit operator char() const { return ((char) SPFix(value)); }
 	explicit operator short() const { return ((short) SPFix(value)); }
@@ -31,11 +30,11 @@ struct ffloat
 	ffloat& operator*=(ffloat f) { value = SPMul(f.value, value); return *this; }
 	ffloat& operator/=(ffloat f) { value = SPDiv(f.value, value); return *this; }
 
-	ffloat operator-() const { ffloat f = *this; asm("eor.b #0x80,%[f]" : [f] "+d" (f.value) : : "cc"); return f; }
-	ffloat operator+(const ffloat& f) const { return ffloat(SPAdd(f.value, value)); }
-	ffloat operator-(const ffloat& f) const { return ffloat(SPSub(f.value, value)); }
-	ffloat operator*(const ffloat& f) const { return ffloat(SPMul(f.value, value)); }
-	ffloat operator/(const ffloat& f) const { return ffloat(SPDiv(f.value, value)); }
+	ffloat operator-() const { ffloat r; r.value = value; asm("eor.b #0x80,%[r]" : [r] "+d" (r.value) : : "cc"); return r; }
+	ffloat operator+(const ffloat& f) const { ffloat r; r.value = SPAdd(f.value, value); return r; }
+	ffloat operator-(const ffloat& f) const { ffloat r; r.value = SPSub(f.value, value); return r; }
+	ffloat operator*(const ffloat& f) const { ffloat r; r.value = SPMul(f.value, value); return r; }
+	ffloat operator/(const ffloat& f) const { ffloat r; r.value = SPDiv(f.value, value); return r; }
 
 	bool operator==(ffloat f) const { bool r; asm("cmp.l %[a],%[b]\n seq.b %[r]\n neg.b %[r]" : [r] "=d" (r) : [a] "d" (value), [b] "d" (f.value) : "cc"); return r; }
 	bool operator!=(ffloat f) const { bool r; asm("cmp.l %[a],%[b]\n sne.b %[r]\n neg.b %[r]" : [r] "=d" (r) : [a] "d" (value), [b] "d" (f.value) : "cc"); return r; }
@@ -43,38 +42,41 @@ struct ffloat
 	bool operator<(ffloat f) const { return (SPCmp(value, f.value) < 0); }
 	bool operator>=(ffloat f) const { return (SPCmp(value, f.value) >= 0); }
 	bool operator<=(ffloat f) const { return (SPCmp(value, f.value) <= 0); }
-};
 
-////////////////////////////////////////////////////////////////////////////////
-// Constants.
-////////////////////////////////////////////////////////////////////////////////
-extern const ffloat ff_zero;
-extern const ffloat ff_one;
-extern const ffloat ff_two;
-extern const ffloat ff_half;
-extern const ffloat ff_pi;
-extern const ffloat ff_one_over_pi;
-extern const ffloat ff_two_pi;
-extern const ffloat ff_two_over_pi;
-extern const ffloat ff_half_pi;
-extern const ffloat ff_three_half_pi;
-extern const ffloat ff_four_over_pi;
-extern const ffloat ff_pi_over_oneeighty;
-extern const ffloat ff_oneeighty_over_pi;
+private:
+	ffloat(float f);
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 // Conversions.
 ////////////////////////////////////////////////////////////////////////////////
-ffloat ffloat_from_ieee(float f);
-float ieee_from_ffloat(ffloat f);
+inline ffloat ffloat_from_ieee(float f) { ffloat r; r.value = ffp_from_ieee(f); return r; }
+inline float ieee_from_ffloat(ffloat f) { return ieee_from_ffp(f.value); }
+
+////////////////////////////////////////////////////////////////////////////////
+// Consts.
+////////////////////////////////////////////////////////////////////////////////
+const ffloat ff_zero			  = ffloat_from_ieee(0.0f);
+const ffloat ff_one				  = ffloat_from_ieee(1.0f);
+const ffloat ff_two				  = ffloat_from_ieee(2.0f);
+const ffloat ff_half			  = ffloat_from_ieee(0.5f);
+const ffloat ff_pi				  = ffloat_from_ieee(Pi);
+const ffloat ff_one_over_pi		  = ffloat_from_ieee(1.0f / Pi);
+const ffloat ff_two_pi			  = ffloat_from_ieee(2.0f * Pi);
+const ffloat ff_two_over_pi		  = ffloat_from_ieee(2.0f / Pi);
+const ffloat ff_half_pi			  = ffloat_from_ieee(0.5f * Pi);
+const ffloat ff_one_and_a_half_pi = ffloat_from_ieee(1.5f * Pi);
+const ffloat ff_four_over_pi	  = ffloat_from_ieee(4.0f / Pi);
+const ffloat ff_pi_over_oneeighty = ffloat_from_ieee(Pi / 180.0f);
+const ffloat ff_oneeighty_over_pi = ffloat_from_ieee(180.0f / Pi);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Math.
 ////////////////////////////////////////////////////////////////////////////////
 inline ffloat abs(ffloat f) { asm("and.b #0x7f,%[f]" : [f] "+d" (f.value) : : "cc"); return f; }
 inline ffloat sign(ffloat f) { ffloat r; asm("move.l #0x80000041,%[r]\n and.b #0x80,%[f]\n or.b %[f],%[r]" : [r] "=d" (r.value), [f] "+d" (f.value) : : "cc"); return r; }
-inline ffloat floor(ffloat f) { return ffloat(SPFloor(f.value)); }
-inline ffloat ceil(ffloat f) { return ffloat(SPCeil(f.value)); }
+inline ffloat floor(ffloat f) { ffloat r; r.value = SPFloor(f.value); return r; }
+inline ffloat ceil(ffloat f) { ffloat r; r.value = SPCeil(f.value); return r; }
 inline ffloat round(ffloat f) { return ((SPTst(f.value) < 0) ? ceil(f - ff_half) : floor(f + ff_half)); }
 
 ////////////////////////////////////////////////////////////////////////////////
